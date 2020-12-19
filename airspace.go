@@ -2,19 +2,56 @@ package airspace
 
 import (
 	"fmt"
+	"github.com/paulmach/orb/geo"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/paulcager/osgridref"
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/planar"
 	"gopkg.in/yaml.v2"
 )
 
 // Download airspace defs in yaml from https://gitlab.com/ahsparrow/airspace
 // Schema is https://gitlab.com/ahsparrow/yaixm/-/blob/master/yaixm/data/schema.yaml
+
+// Airspace definitions - similar to `airspaceResponse` but sanitised.
+// github.com/golang/geo/r2
+
+var _ = planar.Length
+
+type Feature struct {
+	ID       string
+	Name     string
+	Type     string
+	Class    string
+	Geometry []Volume
+}
+
+type Volume struct {
+	ID                string
+	Name              string
+	Type              string
+	Class             string
+	Sequence          int
+	Lower             float64
+	Upper             float64
+	ClearanceRequired bool
+	Danger            bool
+	// The (horizontal) shape will be either a circle or a polygon.
+	// One of:
+	Circle  Circle
+	Polygon orb.Ring
+}
+
+type Circle struct {
+	Radius float64
+	Centre orb.Point
+}
 
 var (
 	prohibitedAirspaceClasses = map[string]bool{
@@ -65,15 +102,6 @@ func ClearanceRequired(f Feature) bool {
 func Danger(f Feature) bool {
 	return dangerTypes[f.Type]
 }
-
-//func init() {
-//	a, err := Load(`https://gitlab.com/ahsparrow/airspace/-/raw/master/airspace.yaml`)
-//	if err != nil {
-//		panic(err)
-//	}
-//	pretty.Println(a)
-//	os.Exit(2)
-//}
 
 // This type is used to decode YAML data from https://gitlab.com/ahsparrow/airspace/-/raw/master/airspace.yaml (and equivalent).
 type airspaceResponse struct {
@@ -136,39 +164,6 @@ type ratResponse struct {
 	}
 }
 
-// Airspace definitions - similar to `airspaceResponse` but sanitised.
-// github.com/golang/geo/r2
-
-type Feature struct {
-	ID       string
-	Name     string
-	Type     string
-	Class    string
-	Geometry []Volume
-}
-
-type Volume struct {
-	ID                string
-	Name              string
-	Class             string
-	Sequence          int
-	Lower             float64
-	Upper             float64
-	ClearanceRequired bool
-	Danger            bool
-	// The (horizontal) shape will be either a circle or a polygon.
-	// One of:
-	Circle  Circle
-	Polygon Polygon
-}
-
-type Polygon []osgridref.LatLon
-
-type Circle struct {
-	Radius float64
-	Centre osgridref.LatLon
-}
-
 func Decode(data []byte) ([]Feature, error) {
 	var a airspaceResponse
 	err := yaml.Unmarshal(data, &a)
@@ -210,6 +205,7 @@ func normalise(a *airspaceResponse) ([]Feature, error) {
 			vol := Volume{
 				ID:                id,
 				Name:              name,
+				Type:              f.Type,
 				Class:             class,
 				Sequence:          g.Seqno,
 				Lower:             decodeHeight(g.Lower),
@@ -218,7 +214,8 @@ func normalise(a *airspaceResponse) ([]Feature, error) {
 				Danger:            Danger(feat),
 			}
 
-			var currentPos osgridref.LatLon
+			var currentPos orb.Point
+
 			for _, b := range g.Boundary {
 				if b.Circle.Radius != "" {
 					var err error
@@ -262,9 +259,9 @@ func normalise(a *airspaceResponse) ([]Feature, error) {
 	return features, nil
 }
 
-func arcToPolygon(centre osgridref.LatLon, radius float64, initialPoint osgridref.LatLon, to osgridref.LatLon, dir float64) []osgridref.LatLon {
-	initialAngleDeg := centre.InitialBearingTo(initialPoint)
-	finalAngleDeg := centre.InitialBearingTo(to)
+func arcToPolygon(centre orb.Point, radius float64, initialPoint orb.Point, to orb.Point, dir float64) orb.LineString {
+	initialAngleDeg := geo.Bearing(centre, initialPoint)
+	finalAngleDeg := geo.Bearing(centre, to)
 
 	if dir > 0 {
 		// Clockwise
@@ -279,9 +276,9 @@ func arcToPolygon(centre osgridref.LatLon, radius float64, initialPoint osgridre
 
 	// fmt.Printf("c=%s, r=%f, ini=%f, final=%f, dir=%f\n", centre, radius, initialAngleDeg, finalAngleDeg, dir)
 
-	var poly []osgridref.LatLon
+	var poly orb.LineString
 	for a := initialAngleDeg; dir*a < dir*finalAngleDeg; a += dir * 10 {
-		point := centre.DestinationPoint(radius, osgridref.Wrap360(a))
+		point := destinationPoint(centre, radius, a)
 		poly = append(poly, point)
 	}
 	poly = append(poly, to)
@@ -289,42 +286,65 @@ func arcToPolygon(centre osgridref.LatLon, radius float64, initialPoint osgridre
 	return poly
 }
 
-func parseLatLng(str string) (osgridref.LatLon, error) {
+func toRadians(angle float64) float64 {
+	return math.Pi / 180.0 * angle
+}
+func toDegrees(angle float64) float64 {
+	return 180.0 / math.Pi * angle
+}
+
+func destinationPoint(start orb.Point, bearing float64, distance float64) orb.Point {
+	angularDistance := distance / orb.EarthRadius // (in radians).
+	bearingRadians := toRadians(bearing)
+	lat1 := toRadians(start.Lat())
+	lon1 := toRadians(start.Lon())
+	sinLat2 := math.Sin(lat1)*math.Cos(angularDistance) + math.Cos(lat1)*math.Sin(angularDistance)*math.Cos(bearingRadians)
+	lat2 := math.Asin(sinLat2)
+
+	x := math.Cos(angularDistance) - math.Sin(lat1)*sinLat2
+	y := math.Sin(bearingRadians) * math.Sin(angularDistance) * math.Cos(lat1)
+
+	lon2 := lon1 + math.Atan2(y, x)
+
+	return orb.Point{toDegrees(lat2), toDegrees(lon2)}
+}
+
+func parseLatLng(str string) (orb.Point, error) {
 	returnedError := fmt.Errorf("bad point: %#q, must be in format %q (degrees,minutes,seconds)", str, "502257N 0033739W")
 
 	if len(str) != 16 || str[7] != ' ' {
-		return osgridref.LatLon{}, returnedError
+		return orb.Point{}, returnedError
 	}
 
 	deg, err1 := strconv.ParseUint(str[0:2], 10, 64)
 	mm, err2 := strconv.ParseUint(str[2:4], 10, 64)
 	ss, err3 := strconv.ParseUint(str[4:6], 10, 64)
 	if err1 != nil || err2 != nil || err3 != nil {
-		return osgridref.LatLon{}, returnedError
+		return orb.Point{}, returnedError
 	}
 
 	lat := float64(deg) + float64(mm)/60.0 + float64(ss)/2600.0
 	if str[6] == 'S' {
 		lat = -lat
 	} else if str[6] != 'N' {
-		return osgridref.LatLon{}, returnedError
+		return orb.Point{}, returnedError
 	}
 
 	deg, err1 = strconv.ParseUint(str[8:11], 10, 64)
 	mm, err2 = strconv.ParseUint(str[11:13], 10, 64)
 	ss, err3 = strconv.ParseUint(str[13:15], 10, 64)
 	if err1 != nil || err2 != nil || err3 != nil {
-		return osgridref.LatLon{}, returnedError
+		return orb.Point{}, returnedError
 	}
 
 	lng := float64(deg) + float64(mm)/60.0 + float64(ss)/2600.0
 	if str[15] == 'W' {
 		lng = -lng
 	} else if str[15] != 'E' {
-		return osgridref.LatLon{}, returnedError
+		return orb.Point{}, returnedError
 	}
 
-	return osgridref.LatLon{Lat: lat, Lon: lng}, nil
+	return orb.Point{lat, lng}, nil
 }
 
 func decodeHeight(h string) float64 {

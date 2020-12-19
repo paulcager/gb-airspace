@@ -1,10 +1,11 @@
 package airspace
 
 import (
+	"github.com/paulcager/osgridref"
+	"github.com/paulmach/orb"
 	"reflect"
 	"testing"
 
-	"github.com/paulcager/osgridref"
 	"github.com/stretchr/testify/require"
 )
 import "github.com/stretchr/testify/assert"
@@ -97,10 +98,10 @@ func TestDownload(t *testing.T) {
 
 func Test_arcToPolygon(t *testing.T) {
 	type args struct {
-		centre       osgridref.LatLon
+		centre       orb.Point
 		radius       float64
-		initialPoint osgridref.LatLon
-		to           osgridref.LatLon
+		initialPoint orb.Point
+		to           orb.Point
 		dir          float64
 	}
 	tests := []struct {
