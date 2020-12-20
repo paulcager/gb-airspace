@@ -1,14 +1,13 @@
 package airspace
 
 import (
-	"github.com/paulcager/osgridref"
-	"github.com/paulmach/orb"
 	"reflect"
 	"testing"
 
+	"github.com/paulmach/orb"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-import "github.com/stretchr/testify/assert"
 
 var data = `
 airspace:
@@ -107,7 +106,7 @@ func Test_arcToPolygon(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want []osgridref.LatLon
+		want []orb.Point
 	}{
 		// TODO: Add test cases.
 	}
