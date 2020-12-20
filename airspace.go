@@ -3,6 +3,7 @@ package airspace
 import (
 	"fmt"
 	"github.com/paulmach/orb/geo"
+	"github.com/paulmach/orb/project"
 	"io/ioutil"
 	"log"
 	"math"
@@ -91,7 +92,7 @@ var (
 		"ILS":     false, // ILS feather
 		"LASER":   true,  // Laser site.
 		"NOATZ":   true,  // Non-ATZ airfield
-		"UL":      false, // Ultra-light strip
+		"UL":      true, // Ultra-light strip
 	}
 )
 
@@ -178,7 +179,7 @@ func normalise(a *airspaceResponse) ([]Feature, error) {
 		if f.Type == "OTHER" {
 			t = f.LocalType
 		} else if f.Type == "D_OTHER" {
-			t = "Danger:" + f.LocalType
+			t = f.LocalType
 		}
 
 		feat := Feature{
@@ -205,7 +206,7 @@ func normalise(a *airspaceResponse) ([]Feature, error) {
 			vol := Volume{
 				ID:                id,
 				Name:              name,
-				Type:              f.Type,
+				Type:              feat.Type,
 				Class:             class,
 				Sequence:          g.Seqno,
 				Lower:             decodeHeight(g.Lower),
@@ -278,7 +279,7 @@ func arcToPolygon(centre orb.Point, radius float64, initialPoint orb.Point, to o
 
 	var poly orb.LineString
 	for a := initialAngleDeg; dir*a < dir*finalAngleDeg; a += dir * 10 {
-		point := destinationPoint(centre, radius, a)
+		point := destinationPoint(centre, a, radius)
 		poly = append(poly, point)
 	}
 	poly = append(poly, to)
@@ -306,7 +307,7 @@ func destinationPoint(start orb.Point, bearing float64, distance float64) orb.Po
 
 	lon2 := lon1 + math.Atan2(y, x)
 
-	return orb.Point{toDegrees(lat2), toDegrees(lon2)}
+	return orb.Point{toDegrees(lon2), toDegrees(lat2)}
 }
 
 func parseLatLng(str string) (orb.Point, error) {
@@ -344,7 +345,7 @@ func parseLatLng(str string) (orb.Point, error) {
 		return orb.Point{}, returnedError
 	}
 
-	return orb.Point{lat, lng}, nil
+	return orb.Point{lng, lat}, nil
 }
 
 func decodeHeight(h string) float64 {
@@ -419,6 +420,36 @@ func LoadFile(fileName string) ([]Feature, error) {
 		return nil, err
 	}
 	return Decode(b)
+}
+
+func EnclosingVolumes(point orb.Point, features []Feature) []Volume {
+	enclosingVolumes := make([]Volume, 0)
+	for _, f := range features {
+		for _, v := range f.Geometry {
+			if isEnclosedBy(point, v) {
+				enclosingVolumes = append(enclosingVolumes, v)
+			}
+		}
+	}
+
+	return enclosingVolumes
+}
+
+func isEnclosedBy(p orb.Point, vol Volume) bool {
+	if vol.Circle.Radius != 0 {
+		projectedCentre := project.Point(vol.Circle.Centre, project.WGS84.ToMercator)
+		projectedPoint := project.Point(p, project.WGS84.ToMercator)
+		if planar.Distance(projectedPoint, projectedCentre) <= vol.Circle.Radius {
+			return true
+		}
+	}
+	if len(vol.Polygon) > 0 {
+		if planar.RingContains(vol.Polygon, p) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // https://developers.google.com/maps/documentation/javascript/overlays

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/paulmach/orb"
-	"github.com/paulmach/orb/project"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,7 +12,6 @@ import (
 
 	airspace "github.com/paulcager/gb-airspace"
 	"github.com/paulcager/go-http-middleware"
-	"github.com/paulmach/orb/planar"
 	flag "github.com/spf13/pflag"
 )
 
@@ -25,7 +23,6 @@ var (
 	port     string
 	dataURL  string
 	features []airspace.Feature
-	_        = planar.RingContains
 )
 
 func main() {
@@ -82,39 +79,14 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	point := orb.Point{lat, lon}
-
-	enclosingVolumes := make([]airspace.Volume, 0)
-	for _, f := range features {
-		for _, v := range f.Geometry {
-			if isEnclosedBy(point, v) {
-				enclosingVolumes = append(enclosingVolumes, v)
-			}
-		}
-	}
+	point := orb.Point{lon, lat}
+	enclosingVolumes := airspace.EnclosingVolumes(point, features)
 
 	w.Header().Add("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(enclosingVolumes); err != nil {
 		log.Printf("Failed to write response: %s", err)
 		w.WriteHeader(http.StatusBadGateway)
 	}
-}
-
-func isEnclosedBy(p orb.Point, vol airspace.Volume) bool {
-	if vol.Circle.Radius != 0 {
-		projectedCentre := project.Point(vol.Circle.Centre, project.WGS84.ToMercator)
-		projectedPoint := project.Point(p, project.WGS84.ToMercator)
-		if planar.Distance(projectedPoint, projectedCentre) <= vol.Circle.Radius {
-			return true
-		}
-	}
-	if len(vol.Polygon) > 0 {
-		if planar.RingContains(vol.Polygon, p) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func handleError(w http.ResponseWriter, _ *http.Request, str string, err error) {
