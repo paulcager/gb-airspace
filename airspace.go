@@ -174,7 +174,7 @@ func Decode(data []byte) ([]Feature, error) {
 
 func normalise(a *airspaceResponse) ([]Feature, error) {
 	var features []Feature
-	for _, f := range a.Airspace {
+	for i, f := range a.Airspace {
 		t := f.Type
 		if f.Type == "OTHER" {
 			t = f.LocalType
@@ -182,8 +182,14 @@ func normalise(a *airspaceResponse) ([]Feature, error) {
 			t = f.LocalType
 		}
 
+		id := strings.TrimSpace(f.ID)
+		if id == "" {
+			// Dropzones and similar don't have explicit IDs.
+			id = strings.ToLower(strings.ReplaceAll(f.Name, " ", "-")) + "-" + strconv.FormatInt(int64(i),10)
+		}
+
 		feat := Feature{
-			ID:    f.ID,
+			ID:    id,
 			Name:  f.Name,
 			Type:  t,
 			Class: f.Class,
@@ -422,7 +428,7 @@ func LoadFile(fileName string) ([]Feature, error) {
 	return Decode(b)
 }
 
-func EnclosingVolumes(point orb.Point, features []Feature) []Volume {
+func EnclosingVolumes(point orb.Point, features map[string]Feature) []Volume {
 	enclosingVolumes := make([]Volume, 0)
 	for _, f := range features {
 		for _, v := range f.Geometry {

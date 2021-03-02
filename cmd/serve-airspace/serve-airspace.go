@@ -6,6 +6,7 @@ import (
 	"github.com/paulmach/orb"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +23,7 @@ const (
 var (
 	port     string
 	dataURL  string
-	features []airspace.Feature
+	features map[string]airspace.Feature
 )
 
 func main() {
@@ -34,11 +35,26 @@ func main() {
 		port = ":" + port
 	}
 
-	var err error
-	features, err = airspace.Load(dataURL)
+	featureList, err := airspace.Load(dataURL)
 	if err != nil {
 		panic(err)
 	}
+
+	features = make(map[string]airspace.Feature, len(featureList))
+	for _, f := range featureList {
+		if _, ok := features[f.ID]; ok {
+			log.Printf("Duplicate feature ID %q. Lookups will be undefined", f.ID)
+		}
+		features[f.ID]=f
+	}
+
+	out, _ := os.Create("/tmp/pc1.txt")
+	for i, f := range features {
+		for j, v := range f.Geometry {
+			fmt.Fprintln(out, i, j, "<", v.ID, ">", v.Type, v.Sequence, v.Circle.Radius == 0, v.Lower, v.Upper)
+		}
+	}
+	out.Close()
 
 	server := makeHTTPServer(port)
 	log.Fatal(server.ListenAndServe())
@@ -46,6 +62,10 @@ func main() {
 
 func makeHTTPServer(listenPort string) *http.Server {
 	middleware.EnablePrometheus()
+
+	http.Handle(
+		"/"+apiVersion+"/airspace/all",
+		middleware.MakeLoggingHandler(http.HandlerFunc(handleRequestAll)))
 
 	http.Handle(
 		"/"+apiVersion+"/airspace/",
@@ -65,7 +85,55 @@ func makeHTTPServer(listenPort string) *http.Server {
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
-	latLonStr := r.URL.Path[len("/"+apiVersion+"/airspace/"):]
+	values := r.URL.Query()
+	latLon := strings.TrimSpace(values.Get("latlon"))
+	name := strings.TrimSpace(values.Get("name"))
+
+	if name != "" {
+		handleNamedRequest(w, r, name)
+		return
+	}
+
+	if latLon != "" {
+		handleLatlonRequest(w, r, latLon)
+		return
+	}
+
+	http.Error(w, "Invalid request", http.StatusBadRequest)
+}
+
+func handleRequestAll(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(features)
+	if err != nil {
+		log.Println("handleRequestAll:", err)
+		http.Error(w, fmt.Sprintf("JSON encoding error: %s", err), http.StatusInternalServerError)
+	}
+}
+
+func handleNamedRequest(w http.ResponseWriter, r *http.Request, id string) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	f,ok := features[id]
+	if !ok {
+		log.Printf("Did not find feature %q\n", id)
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(f)
+	if err != nil {
+		log.Println("handleNamedRequest(" + id + "):", err)
+		http.Error(w, fmt.Sprintf("JSON encoding error: %s", err), http.StatusInternalServerError)
+	}
+}
+
+func handleLatlonRequest(w http.ResponseWriter, r *http.Request, latLonStr string) {
 	parts := strings.Split(latLonStr, ",")
 	if len(parts) != 2 {
 		handleError(w, r, latLonStr, nil)
