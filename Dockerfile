@@ -2,7 +2,7 @@ FROM paulcager/go-base:latest as build
 WORKDIR /go/src/
 
 COPY . /go/src/github.com/paulcager/gb-airspace
-RUN cd /go/src/github.com/paulcager/gb-airspace && go test ./... && go install ./...
+RUN cd /go/src/github.com/paulcager/gb-airspace && go test ./... && CGO_ENABLED=0 go install ./...
 
 ####################################################################################################
 
