@@ -7,10 +7,10 @@ RUN cd /go/src/github.com/paulcager/gb-airspace && go test ./... && go install .
 ####################################################################################################
 
 
-FROM debian:stable-slim
-RUN apt-get update && apt-get -y upgrade && apt-get install -y ca-certificates
+FROM scratch
 WORKDIR /app
 COPY --from=build /go/bin/* ./
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 EXPOSE 9092
 CMD ["/app/serve-airspace", "--port", ":9092" ]
 
