@@ -56,8 +56,15 @@ go build ./cmd/serve-airspace
 
 #### Pre-built Images
 
-Pull and run the latest pre-built image from GitHub Container Registry:
+Images are automatically published to both Docker Hub and GitHub Container Registry.
 
+**Docker Hub** (recommended - easier to use):
+```bash
+docker pull paulcager/gb-airspace:latest
+docker run -p 9092:9092 paulcager/gb-airspace:latest
+```
+
+**GitHub Container Registry**:
 ```bash
 docker pull ghcr.io/paulcager/gb-airspace:latest
 docker run -p 9092:9092 ghcr.io/paulcager/gb-airspace:latest
@@ -67,6 +74,7 @@ Available tags:
 - `latest` - Latest build from master branch
 - `v1.2.3` - Specific version tags
 - `master` - Latest master branch build
+- `master-abc1234` - Specific commit builds
 
 #### Building Locally
 
