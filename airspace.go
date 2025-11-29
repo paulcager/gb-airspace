@@ -168,7 +168,9 @@ type ratResponse struct {
 
 func Decode(data []byte) ([]Feature, error) {
 	var a airspaceResponse
-	err := yaml.Unmarshal(data, &a)
+	if err := yaml.Unmarshal(data, &a); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
+	}
 	features, err := normalise(&a)
 	return features, err
 }

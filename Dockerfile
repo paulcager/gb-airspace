@@ -1,4 +1,4 @@
-FROM paulcager/go-base:latest as build
+FROM paulcager/go-base:latest AS build
 WORKDIR /go/src/
 
 COPY . /go/src/github.com/paulcager/gb-airspace

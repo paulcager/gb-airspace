@@ -85,6 +85,21 @@ func TestDecode(t *testing.T) {
 	assert.Equal(t, 19, len(features[0].Geometry[0].Polygon))
 }
 
+func TestDecodeInvalidYAML(t *testing.T) {
+	// Test that invalid YAML is properly rejected
+	invalidYAML := []byte(`this is not: valid: yaml: {{{`)
+	_, err := Decode(invalidYAML)
+	assert.Error(t, err, "Should return error for invalid YAML")
+	assert.Contains(t, err.Error(), "failed to unmarshal YAML", "Error should mention YAML unmarshaling")
+}
+
+func TestDecodeEmptyData(t *testing.T) {
+	// Test that empty data doesn't cause a panic
+	features, err := Decode([]byte(""))
+	require.NoError(t, err, "Empty YAML should not error")
+	assert.Empty(t, features, "Should return empty feature list")
+}
+
 func TestDownload(t *testing.T) {
 	// Verify real-life data exists and can be parsed correctly.
 	url := `https://raw.githubusercontent.com/ahsparrow/airspace/master/airspace.yaml`

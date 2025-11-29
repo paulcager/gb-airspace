@@ -12,10 +12,6 @@ on:
       - master
       - main
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
   test:
     name: Run Tests
@@ -51,42 +47,68 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Login to GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
+      # Login to Docker Hub (only if secrets are configured)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        if: ${{ secrets.DOCKERHUB_USERNAME }}
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Extract metadata for GitHub Container Registry
+      - name: Extract metadata for GHCR
+        id: meta-ghcr
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ghcr.io/${{ github.repository }}
           tags: |
-            # Tag with branch name for branch pushes
             type=ref,event=branch
-            # Tag with version for tag pushes (v1.2.3 -> 1.2.3)
             type=semver,pattern={{version}}
-            # Tag with major.minor for tag pushes (v1.2.3 -> 1.2)
             type=semver,pattern={{major}}.{{minor}}
-            # Tag with major for tag pushes (v1.2.3 -> 1)
             type=semver,pattern={{major}}
-            # Always tag with 'latest' for master/main branch
             type=raw,value=latest,enable={{is_default_branch}}
-            # Tag with commit SHA
             type=sha,prefix={{branch}}-
 
+      # Extract metadata for Docker Hub
+      - name: Extract metadata for Docker Hub
+        id: meta-dockerhub
+        if: ${{ secrets.DOCKERHUB_USERNAME }}
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/gb-airspace
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Build and push to both registries
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ steps.meta-ghcr.outputs.tags }}
+            ${{ steps.meta-dockerhub.outputs.tags }}
+          labels: ${{ steps.meta-ghcr.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
       - name: Image digest
-        run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
+        run: |
+          echo "GitHub Container Registry:"
+          echo "${{ steps.meta-ghcr.outputs.tags }}"
+          echo ""
+          echo "Docker Hub:"
+          echo "${{ steps.meta-dockerhub.outputs.tags }}"
