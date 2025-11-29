@@ -1,5 +1,7 @@
 # gb-airspace
 
+[![Build and Push Docker Image](https://github.com/paulcager/gb-airspace/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/paulcager/gb-airspace/actions/workflows/docker-publish.yml)
+
 A Go library and REST server providing UK airspace information for paraglider and hang glider pilots.
 
 This project parses and serves airspace data from the [ahsparrow/airspace](https://github.com/ahsparrow/airspace)
@@ -51,6 +53,22 @@ go build ./cmd/serve-airspace
 ```
 
 ### Using Docker
+
+#### Pre-built Images
+
+Pull and run the latest pre-built image from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/paulcager/gb-airspace:latest
+docker run -p 9092:9092 ghcr.io/paulcager/gb-airspace:latest
+```
+
+Available tags:
+- `latest` - Latest build from master branch
+- `v1.2.3` - Specific version tags
+- `master` - Latest master branch build
+
+#### Building Locally
 
 ```bash
 docker build -t gb-airspace .
