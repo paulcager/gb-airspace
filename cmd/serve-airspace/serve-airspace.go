@@ -3,13 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/paulmach/orb"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/paulmach/orb"
 
 	airspace "github.com/paulcager/gb-airspace"
 	"github.com/paulcager/go-http-middleware"
@@ -28,7 +29,7 @@ var (
 
 func main() {
 	flag.StringVarP(&port, "port", "p", ":9092", "Port to listen on")
-	flag.StringVarP(&dataURL, "airspace-url", "u", "https://gitlab.com/ahsparrow/airspace/-/raw/master/airspace.yaml", "airspace.yaml URL")
+	flag.StringVarP(&dataURL, "airspace-url", "u", "https://raw.githubusercontent.com/ahsparrow/airspace/master/airspace.yaml", "airspace.yaml URL")
 	flag.Parse()
 
 	if !strings.HasPrefix(port, ":") {
@@ -45,7 +46,7 @@ func main() {
 		if _, ok := features[f.ID]; ok {
 			log.Printf("Duplicate feature ID %q. Lookups will be undefined", f.ID)
 		}
-		features[f.ID]=f
+		features[f.ID] = f
 	}
 
 	out, _ := os.Create("/tmp/pc1.txt")
@@ -116,7 +117,7 @@ func handleRequestAll(w http.ResponseWriter, _ *http.Request) {
 func handleNamedRequest(w http.ResponseWriter, r *http.Request, id string) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	f,ok := features[id]
+	f, ok := features[id]
 	if !ok {
 		log.Printf("Did not find feature %q\n", id)
 		http.NotFound(w, r)
@@ -128,7 +129,7 @@ func handleNamedRequest(w http.ResponseWriter, r *http.Request, id string) {
 	encoder.SetEscapeHTML(false)
 	err := encoder.Encode(f)
 	if err != nil {
-		log.Println("handleNamedRequest(" + id + "):", err)
+		log.Println("handleNamedRequest("+id+"):", err)
 		http.Error(w, fmt.Sprintf("JSON encoding error: %s", err), http.StatusInternalServerError)
 	}
 }

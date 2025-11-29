@@ -2,8 +2,6 @@ package airspace
 
 import (
 	"fmt"
-	"github.com/paulmach/orb/geo"
-	"github.com/paulmach/orb/project"
 	"io/ioutil"
 	"log"
 	"math"
@@ -12,13 +10,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/paulmach/orb/geo"
+	"github.com/paulmach/orb/project"
+
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/planar"
 	"gopkg.in/yaml.v2"
 )
 
-// Download airspace defs in yaml from https://gitlab.com/ahsparrow/airspace
-// Schema is https://gitlab.com/ahsparrow/yaixm/-/blob/master/yaixm/data/schema.yaml
+// Download airspace defs in yaml from https://github.com/ahsparrow/airspace
+// Schema is https://github.com/ahsparrow/yaixm/blob/master/yaixm/data/schema.yaml
 
 // Airspace definitions - similar to `airspaceResponse` but sanitised.
 // github.com/golang/geo/r2
@@ -92,7 +93,7 @@ var (
 		"ILS":     false, // ILS feather
 		"LASER":   true,  // Laser site.
 		"NOATZ":   true,  // Non-ATZ airfield
-		"UL":      true, // Ultra-light strip
+		"UL":      true,  // Ultra-light strip
 	}
 )
 
@@ -104,7 +105,7 @@ func Danger(f Feature) bool {
 	return dangerTypes[f.Type]
 }
 
-// This type is used to decode YAML data from https://gitlab.com/ahsparrow/airspace/-/raw/master/airspace.yaml (and equivalent).
+// This type is used to decode YAML data from https://raw.githubusercontent.com/ahsparrow/airspace/master/airspace.yaml (and equivalent).
 type airspaceResponse struct {
 	Airspace []struct {
 		ID          string
@@ -185,7 +186,7 @@ func normalise(a *airspaceResponse) ([]Feature, error) {
 		id := strings.TrimSpace(f.ID)
 		if id == "" {
 			// Dropzones and similar don't have explicit IDs.
-			id = strings.ToLower(strings.ReplaceAll(f.Name, " ", "-")) + "-" + strconv.FormatInt(int64(i),10)
+			id = strings.ToLower(strings.ReplaceAll(f.Name, " ", "-")) + "-" + strconv.FormatInt(int64(i), 10)
 		}
 
 		feat := Feature{

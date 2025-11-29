@@ -88,7 +88,7 @@ func TestDecode(t *testing.T) {
 
 func TestDownload(t *testing.T) {
 	// Verify real-life data exists and can be parsed correctly.
-	url := `https://gitlab.com/ahsparrow/airspace/-/raw/master/airspace.yaml`
+	url := `https://raw.githubusercontent.com/ahsparrow/airspace/master/airspace.yaml`
 	a, err := Load(url)
 	require.NoError(t, err)
 
